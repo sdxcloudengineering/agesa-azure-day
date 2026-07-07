@@ -1,0 +1,27 @@
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Reverse proxy to the backend API. BACKEND_HOST/BACKEND_PORT are
+    # substituted at container start (see Dockerfile CMD), so the same image
+    # can be pointed at any backend service name/host - handy when this later
+    # runs as a Kubernetes Service (e.g. BACKEND_HOST=backend-service).
+    location /api/ {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /health {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}/health;
+    }
+}
