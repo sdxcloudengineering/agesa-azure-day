@@ -1,9 +1,9 @@
-# Güven Sigorta – Demo Uygulaması
+# SabancıDx - AgeSA Azure Day – Demo Uygulaması
 
 Kubernetes deploy demosu için hazırlanmış, dockerize edilmiş sigortacılık örnek uygulaması.
 
 - **Backend:** Python / FastAPI + SQLAlchemy (PostgreSQL)
-- **Frontend:** Vue 3 + Vite, üretimde Nginx üzerinden servis edilir
+- **Frontend:** Vue 3 + Vite, derlenip FastAPI tarafından statik dosya olarak servis edilir
 - **Veritabanı:** PostgreSQL (bu demoda **Azure Database for PostgreSQL** kullanılacak; yerel bir DB container'ı bu repoda yok)
 
 Kapsam: Müşteriler, Poliçeler (sağlık / hayat / kasko / konut) ve Hasar Talepleri üzerinde CRUD + basit bir gösterge paneli.
@@ -11,9 +11,12 @@ Kapsam: Müşteriler, Poliçeler (sağlık / hayat / kasko / konut) ve Hasar Tal
 ## Klasör Yapısı
 
 ```
-backend/    FastAPI servisi + Dockerfile
-frontend/   Vue 3 + Vite SPA + Dockerfile (Nginx runtime)
+Dockerfile  Backend + Frontend tek imaj build (repo kökünde, tek Dockerfile)
+backend/    FastAPI servisi
+frontend/   Vue 3 + Vite SPA
 ```
+
+Not: Artık ayrı `backend/Dockerfile` ve `frontend/Dockerfile` yoktur; imaj build'i tek bir kök `Dockerfile` üzerinden yapılır (bkz. bölüm 4).
 
 ## 1) Azure Database for PostgreSQL Hazırlığı
 
@@ -29,18 +32,7 @@ postgresql://<kullanici>:<parola>@<sunucu-adi>.postgres.database.azure.com:5432/
 
 Uygulama açılışta tabloları otomatik oluşturur (`Base.metadata.create_all`) ve veritabanı boşsa örnek veri ekler (`app/seed.py`).
 
-### Docker ile
-
-```powershell
-cd backend
-docker build -t guven-sigorta-backend .
-docker run -d --name guven-backend -p 8000:8000 `
-  -e DATABASE_URL="postgresql://<kullanici>:<parola>@<sunucu-adi>.postgres.database.azure.com:5432/<veritabani>?sslmode=require" `
-  guven-sigorta-backend
-```
-
-API dokümantasyonu: http://localhost:8000/docs
-Health check: http://localhost:8000/health
+Backend'i tek başına Docker imajı olarak build etmek istemiyorsanız (artık ayrı bir `backend/Dockerfile` yoktur), aşağıdaki yerel çalıştırma yöntemini kullanın ya da doğrudan bölüm 4'teki birleşik imajı build edin.
 
 ### Yerel olarak (Docker olmadan)
 
@@ -55,25 +47,7 @@ uvicorn app.main:app --reload
 
 ## 3) Frontend'i Çalıştırma
 
-Üretim imajı, statik dosyaları Nginx ile servis eder ve `/api/*` isteklerini `BACKEND_HOST`/`BACKEND_PORT` ortam değişkenleriyle belirtilen backend'e proxy'ler. Bu sayede aynı imaj hem Docker'da hem de yarınki Kubernetes ortamında (Service adını `BACKEND_HOST` olarak vererek) değişiklik yapmadan kullanılabilir.
-
-### Docker ile
-
-```powershell
-cd frontend
-docker build -t guven-sigorta-frontend .
-
-# Backend'i ayrı bir container olarak çalıştırdıysanız, aynı Docker network'üne alın:
-docker network create guven-net
-docker network connect guven-net guven-backend
-
-docker run -d --name guven-frontend --network guven-net -p 8080:80 `
-  -e BACKEND_HOST=guven-backend `
-  -e BACKEND_PORT=8000 `
-  guven-sigorta-frontend
-```
-
-Uygulama: http://localhost:8080
+Üretimde frontend ayrı bir imaj/Nginx olarak değil; `npm run build` ile derlenip çıktısı (`dist/`) kök `Dockerfile` tarafından backend imajının içine (`app/static`) kopyalanarak FastAPI üzerinden servis edilir (bkz. bölüm 4). Frontend'in artık kendine ait bir `Dockerfile`'ı yoktur.
 
 ### Yerel geliştirme (Docker olmadan)
 
@@ -86,20 +60,20 @@ npm run dev
 
 Vite dev server `http://localhost:5173` adresinde çalışır ve `/api` isteklerini `VITE_DEV_API_TARGET`'a proxy'ler.
 
-## 4) Tek İmaj (Backend + Frontend Birlikte)
+## 4) Docker ile Çalıştırma (Tek İmaj)
 
-Basit tek-konteyner demolar için, frontend derlenip doğrudan FastAPI üzerinden servis edilecek şekilde tek bir imaj da üretilebilir (repo kökündeki `Dockerfile`). Bu modda ayrı bir Nginx/proxy katmanı yoktur; `/api/*` ve statik dosyalar aynı uvicorn süreci tarafından sunulur.
+Backend ve frontend, repo kökündeki tek bir `Dockerfile` ile tek bir imaj olarak build edilir: frontend derlenir (`npm run build`) ve çıktısı FastAPI'nin static dosyaları olarak (`app/static`) imaja kopyalanır. Ayrı bir Nginx/proxy katmanı yoktur; `/api/*` ve statik dosyalar aynı uvicorn süreci tarafından sunulur.
 
 ```powershell
-docker build -t guven-sigorta-app -f Dockerfile .
+docker build -t agesa-demo-app .
 docker run -d --name guven-app -p 8000:8000 `
   -e DATABASE_URL="postgresql://<kullanici>:<parola>@<sunucu-adi>.postgres.database.azure.com:5432/<veritabani>?sslmode=require" `
-  guven-sigorta-app
+  agesa-demo-app
 ```
 
 Uygulama ve API: http://localhost:8000 (frontend `/`, API `/api/*`)
 
-Not: Kubernetes demosu için hâlâ `backend/Dockerfile` + `frontend/Dockerfile` (Nginx reverse proxy) ayrı imaj yaklaşımı önerilir; tek imaj seçeneği yalnızca hızlı/basit çalıştırmalar içindir.
+Kubernetes deploy demosu için de bu tek imaj kullanılacaktır; imaj build edilip istediğiniz registry'ye push edildikten sonra deploy adımında manifestler bu imaj referans alınarak hazırlanır.
 
 ## API Uç Noktaları (özet)
 
