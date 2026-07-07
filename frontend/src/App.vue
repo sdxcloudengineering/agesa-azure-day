@@ -2,8 +2,7 @@
   <div class="layout">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-icon">🛡️</span>
-        <span class="brand-name">AgeSA Demo</span>
+        <img :src="logo" alt="AgeSA" class="brand-logo" />
       </div>
       <nav class="nav">
         <RouterLink to="/" class="nav-link">📊 Genel Bakış</RouterLink>
@@ -19,4 +18,5 @@
 </template>
 
 <script setup>
+import logo from './agesa-sigorta-seeklogo.svg'
 </script>
