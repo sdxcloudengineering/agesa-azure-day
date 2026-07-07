@@ -88,8 +88,48 @@ Kubernetes deploy demosu için de bu tek imaj kullanılacaktır; imaj build edil
 | GET | /api/stats/dashboard        | Gösterge paneli özet istatistikleri |
 | GET | /health                     | Sağlık kontrolü |
 
+## 5) Kubernetes'e Deploy Etme
+
+`k8s/` klasöründe AKS (veya herhangi bir Kubernetes kümesi) için hazır manifestler bulunur:
+
+| Dosya | Açıklama |
+|-------|----------|
+| `00-namespace.yaml` | `agesa-demo` namespace'i |
+| `01-secret.yaml` | `DATABASE_URL` için Secret (demo amaçlı; değerleri kendi bağlantı dizenizle değiştirin) |
+| `02-deployment.yaml` | Uygulama Deployment'ı (2 replica, `/health` üzerinden readiness/liveness probe) |
+| `03-service.yaml` | ClusterIP Service (port 80 → 8000) |
+| `04-ingress.yaml` | NGINX Ingress (host: `demo.agesa.com`) |
+| `kustomization.yaml` | Tüm manifestleri tek komutla uygulamak için |
+
+### Ön koşullar
+
+1. İmajı build edip bir Azure Container Registry'ye (ACR) push edin:
+
+```powershell
+az acr build --registry <acr-adi> --image agesa-demo-app:latest .
+```
+
+2. `k8s/02-deployment.yaml` içindeki `<acr-adi>.azurecr.io/agesa-demo-app:latest` referansını kendi ACR adınızla güncelleyin.
+3. AKS kümenizin ACR'dan imaj çekebilmesi için gerekli izni tanımlayın (`az aks update -n <aks-adi> -g <rg> --attach-acr <acr-adi>`).
+4. `k8s/01-secret.yaml` içindeki `DATABASE_URL` değerini kendi Azure Database for PostgreSQL bağlantı dizenizle değiştirin.
+5. Küme üzerinde bir NGINX Ingress Controller kurulu olmalı (Ingress kullanmak istemiyorsanız `04-ingress.yaml`'ı kustomization'dan çıkarıp `03-service.yaml`'ı `type: LoadBalancer` yapabilirsiniz).
+
+### Deploy
+
+```powershell
+kubectl apply -k k8s/
+```
+
+Durumu kontrol etmek için:
+
+```powershell
+kubectl get pods,svc,ingress -n agesa-demo
+```
+
+Ingress kullanıyorsanız `demo.agesa.com` domainini Ingress'in dış IP'sine yönlendirmeniz (DNS ya da yerel `hosts` dosyası) gerekir.
+
 ## Notlar
 
 - Bu bir demo uygulamasıdır; kimlik doğrulama, girdi doğrulama derinliği ve prod-seviyesi güvenlik sertleştirmeleri kapsam dışıdır.
 - CORS backend'de `*` olarak açık bırakılmıştır (yalnızca demo amaçlı).
-- Kubernetes manifestleri bu aşamada bilinçli olarak eklenmemiştir; imajlar `docker build` ile üretilip istediğiniz registry'ye push edildikten sonra yarınki deploy adımında manifestler ayrıca hazırlanabilir.
+- `k8s/01-secret.yaml` demo/örnek amaçlıdır; gerçek kimlik bilgilerini repoya committ etmeyin, gerekirse `kubectl create secret` ile imperative olarak oluşturun.

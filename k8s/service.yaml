@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agesa-demo-app
+  namespace: agesa-demo
+  labels:
+    app: agesa-demo-app
+spec:
+  type: ClusterIP
+  selector:
+    app: agesa-demo-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
